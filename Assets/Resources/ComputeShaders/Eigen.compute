@@ -1,0 +1,75 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Eigen
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+Texture2D<float4> Source;
+
+/// See http://metamerist.blogspot.com/2006/10/linear-algebra-for-graphics-geeks-svd.html
+float2 SVD_AbsScaleOnly(float2x2 matrixIn)
+
+{
+    float4 vectorized = float4(matrixIn[0], matrixIn[1]);
+    float Q = dot(vectorized, vectorized);
+    float R = determinant(matrixIn); //ad-bc
+    float discriminant = sqrt(Q*Q-4*R*R);
+    float2 scale = sqrt(float2(Q+discriminant, Q-discriminant) / 2);
+    return scale;
+
+}
+
+float2x2 SVD_EigenvectorGivenEigenvalue(float2x2 matrixIn, float2 eigenvalue)
+{
+    eigenvalue = eigenvalue * eigenvalue;
+    float M01 = dot(matrixIn[0], matrixIn[1]);
+    float M00 = dot(matrixIn[0], matrixIn[0]);
+    float2 eigenVectorNumerator = float2(M01, M01);
+    float2 eigenVectorDenominator = eigenvalue - float2(M00, M00);
+    float2 eigenFraction = eigenVectorNumerator / eigenVectorDenominator;
+    float2x2 eigenMatrix = {
+        normalize(float2(eigenFraction.x, 1)),
+        normalize(float2(eigenFraction.y, 1)),
+
+    };
+    eigenMatrix = transpose(eigenMatrix);
+    return eigenMatrix;	
+
+}
+
+void SVD_PartialDecompose(float2x2 matrixIn, out float2x2 U, out float2 scale)
+{
+    scale = SVD_AbsScaleOnly(matrixIn);
+    U = SVD_EigenvectorGivenEigenvalue(matrixIn, scale);
+}
+
+void SVD_FullDecompose(float2x2 matrixIn, out float2x2 U, out float2 scale, out float2x2 V)
+{
+    SVD_PartialDecompose(matrixIn, U, scale);
+    // A = U * E * V
+    // U^T * A = E * V
+    // E^-1 * U^T * A = V
+    float2 inverseScale = 1.0 / scale;
+    float2x2 E = {
+        inverseScale.x, 0,
+        0, inverseScale.y,
+    };
+    V = mul(E, mul(transpose(U), matrixIn));
+}
+
+[numthreads(1,1,1)]
+void Eigen (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    float4 tensor = Source[id.xy];
+    float2x2 matrixIn;
+    matrixIn[0][0] = tensor.r;
+    matrixIn[0][1] = tensor.g;
+    matrixIn[1][0] = tensor.b;
+    matrixIn[1][1] = tensor.a;
+    float2 evalue;
+    float2x2 evector;
+    float2x2 v;
+    SVD_FullDecompose(matrixIn,evector,evalue,v);
+    Result[id.xy] = float4(evector[0][1],evector[1][1],evalue);
+}

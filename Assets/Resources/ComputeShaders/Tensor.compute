@@ -1,0 +1,24 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel ToTensor
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+Texture2D<float4> Source;
+
+[numthreads(1,1,1)]
+void ToTensor (uint3 id : SV_DispatchThreadID)
+{
+    float s_1_1 = Source[id.xy + float2( -1, -1)].r;
+    float s0_1 = Source[id.xy + float2( 0, -1)].r;
+    float s1_1 = Source[id.xy + float2( 1, -1)].r;
+    float s_10 = Source[id.xy + float2(-1, 0)].r;
+    float s10 = Source[id.xy + float2( 1, 0)].r;
+    float s_11 = Source[id.xy + float2(-1, 1)].r;
+    float s01 = Source[id.xy + float2( 0, 1)].r;
+    float s11 = Source[id.xy + float2( 1, 1)].r;
+    
+    float sobelX = -3*s_11+3*s11-10*s_10+10*s10-3*s_1_1+3*s1_1;
+    float sobelY = -3*s_11+3*s_1_1-10*s01+10*s0_1-3*s11+3*s1_1;
+    Result[id.xy] = float4(sobelX*sobelX,sobelX*sobelY,sobelX*sobelY,sobelY*sobelY);
+}

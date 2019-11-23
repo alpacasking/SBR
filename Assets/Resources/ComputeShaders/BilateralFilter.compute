@@ -1,0 +1,47 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel BilateralFilterHorizontal
+#pragma kernel BilateralFilterVertical
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+Texture2D<float4> Source;
+int WindowSize;
+float SigmaSpace;
+float SigmaColor;
+
+[numthreads(1,1,1)]
+void BilateralFilterHorizontal (uint3 id : SV_DispatchThreadID)
+{
+    float4 sum =float4(0,0,0,0);
+    float weightSum = 0;
+    float4 current_color = Source[id.xy];
+    for(int i=-WindowSize;i<=WindowSize;i++){
+        float4 temp_color = Source[uint2(id.x+i,id.y)];
+        float weightSpace = exp(-SigmaSpace*i*i);
+        float4 color_diff = current_color-temp_color;
+        float weightColor = exp(-SigmaColor*dot(color_diff,color_diff));
+        float weight = weightSpace*weightColor;
+        sum += Source[uint2(id.x+i,id.y)] * weight;
+        weightSum += weight;
+    }
+    Result[id.xy] = sum/weightSum;
+}
+
+[numthreads(1,1,1)]
+void BilateralFilterVertical (uint3 id : SV_DispatchThreadID)
+{
+    float4 sum =float4(0,0,0,0);
+    float weightSum = 0;
+    float4 current_color = Source[id.xy];
+    for(int i=-WindowSize;i<=WindowSize;i++){
+        float4 temp_color = Source[uint2(id.x,id.y+i)];
+        float weightSpace = exp(-SigmaSpace*i*i);
+        float4 color_diff = current_color-temp_color;
+        float weightColor = exp(-SigmaColor*dot(color_diff,color_diff));
+        float weight = weightSpace*weightColor;
+        sum += Source[uint2(id.x,id.y+i)] * weight;
+        weightSum += weight;
+    }
+    Result[id.xy] = sum/weightSum;
+}
+

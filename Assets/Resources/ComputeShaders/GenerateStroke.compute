@@ -1,0 +1,40 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GenerateStroke
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+
+struct StrokeData {
+    float4 pos;
+    float4 color;
+    float4 eigens;
+};
+
+AppendStructuredBuffer<StrokeData> GeneratedStrokes;
+Texture2D<float4> Source;
+Texture2D<float4> Eigens;
+int StrokeInterval; 
+
+[numthreads(1,1,1)]
+void GenerateStroke (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x%StrokeInterval == 0 && id.y%StrokeInterval == 0){
+        StrokeData temp ;
+        temp.pos = float4(id.x,id.y,0,1);
+        temp.color = Source[id.xy];
+        float angleCos;
+        float angleSin;
+        float4  tempEigen = Eigens[id.xy];
+        if(tempEigen.x ==0&&tempEigen.y ==0){
+            angleCos = 1;
+            angleSin = 0;
+        }
+        else{
+            float l = length(tempEigen.xy);
+            angleCos = tempEigen.x/l;
+            angleSin = tempEigen.y/l;
+        }
+        
+        temp.eigens = float4(angleCos,-angleSin,tempEigen.z,tempEigen.w);
+        GeneratedStrokes.Append (temp);
+    }
+}

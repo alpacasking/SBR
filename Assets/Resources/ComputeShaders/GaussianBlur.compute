@@ -1,0 +1,38 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GaussianBlurHorizontal
+#pragma kernel GaussianBlurVertical
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+Texture2D<float4> Source;
+int WindowSize;
+float Sigma;
+
+[numthreads(1,1,1)]
+void GaussianBlurHorizontal (uint3 id : SV_DispatchThreadID)
+{
+
+    float4 sum =float4(0,0,0,0);
+    float weightSum = 0;
+    for(int i=-WindowSize;i<=WindowSize;i++){
+        float weight = exp(-Sigma*i*i);
+        sum += Source[uint2(id.x+i,id.y)] * weight;
+        weightSum += weight;
+    }
+    Result[id.xy] = sum/weightSum;
+}
+
+[numthreads(1,1,1)]
+void GaussianBlurVertical (uint3 id : SV_DispatchThreadID)
+{
+
+    float4 sum =float4(0,0,0,0);
+    float weightSum = 0;
+    for(int i=-WindowSize;i<=WindowSize;i++){
+        float weight = exp(-Sigma*i*i);
+        sum += Source[uint2(id.x,id.y+i)] * weight;
+        weightSum += weight;
+    }
+    Result[id.xy] = sum/weightSum;
+}
+
