@@ -16,6 +16,9 @@ public sealed class StrokePainting : PostProcessEffectSettings
     [Range(0.001f, 1), Tooltip("Stroke size used to paint."), DisplayName("Stoke Size")]
     public FloatParameter strokeSize = new FloatParameter { value = 0.01f };
 
+    [Range(0.001f, 1), Tooltip("Stroke ratio used to paint."), DisplayName("Stoke Ratio")]
+    public FloatParameter strokeRatio = new FloatParameter { value = 1f };
+
     [UnityEngine.Rendering.PostProcessing.Min(1), Tooltip("Stroke interval used to paint."), DisplayName("Stoke Interval")]
     public IntParameter strokeInterval = new IntParameter { value = 5 };
     public override bool IsEnabledAndSupported(PostProcessRenderContext context)
@@ -29,7 +32,6 @@ public struct StrokeData
 {
     public Vector4 pos;
     public Color color;
-
     public Vector4 eigens;
 };
 
@@ -79,7 +81,7 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
 
     private int tempRTID2;
 
-    private int tempCanvas;
+    //private int tempCanvas;
 
     public override void Init()
     {
@@ -104,7 +106,7 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
         strokeRenderMat = new Material(Shader.Find("Hidden/RenderStroke"));
         tempRTID1 = Shader.PropertyToID("tempRTID1");
         tempRTID2 = Shader.PropertyToID("tempRTID2");
-        tempCanvas = Shader.PropertyToID("tempCanvas");
+        //tempCanvas = Shader.PropertyToID("tempCanvas");
     }
     public override void Release()
     {
@@ -114,13 +116,18 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
 
     public override void Render(PostProcessRenderContext context)
     {
+        if (strokeRenderMat == null)
+        {
+            Init();
+        }
+        //strokeArgsBuffer.GetData(args);
+        //Debug.Log(args[0]);
         strokeBuffer.SetCounterValue(0);
-        strokeRenderMat.SetFloat("_StrokeSize", settings.strokeSize.value);
         var cmd = context.command;
         cmd.BeginSample(" StrokePainting");
         RenderTextureDescriptor desc = new RenderTextureDescriptor(context.width, context.height);
         desc.enableRandomWrite = true;
-        cmd.GetTemporaryRT(tempCanvas, desc);
+        //cmd.GetTemporaryRT(tempCanvas, desc);
         desc.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32G32B32A32_SFloat;
         cmd.GetTemporaryRT(tempRTID1, desc);
         cmd.GetTemporaryRT(tempRTID2, desc);
@@ -139,14 +146,25 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
 
         //gaussian blur
         cmd.SetComputeIntParam(gaussianBlurShader, "WindowSize", 4);
-        cmd.SetComputeFloatParam(gaussianBlurShader, "Sigma", 0.01f);
+        cmd.SetComputeFloatParam(gaussianBlurShader, "Sigma", 1f);
         cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurHorizontalKernelID, "Source", tempRTID2);
         cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurHorizontalKernelID, "Result", tempRTID1);
         cmd.DispatchCompute(gaussianBlurShader, gaussianBlurHorizontalKernelID, context.width, context.height, 1);
-        cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurHorizontalKernelID, "Source", tempRTID1);
-        cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurHorizontalKernelID, "Result", tempRTID2);
-        cmd.DispatchCompute(gaussianBlurShader, gaussianBlurHorizontalKernelID, context.width, context.height, 1);
+        cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurVerticalKernelID, "Source", tempRTID1);
+        cmd.SetComputeTextureParam(gaussianBlurShader, gaussianBlurVerticalKernelID, "Result", tempRTID2);
+        cmd.DispatchCompute(gaussianBlurShader, gaussianBlurVerticalKernelID, context.width, context.height, 1);
         //cmd.Blit(tempRTID2, context.destination);
+
+        //bilateral Filter
+        /*cmd.SetComputeIntParam(bilateralFilterShader, "WindowSize", 4);
+        cmd.SetComputeFloatParam(bilateralFilterShader, "SigmaSpace", 0.01f);
+        cmd.SetComputeFloatParam(bilateralFilterShader, "SigmaColor", 0.01f);
+        cmd.SetComputeTextureParam(bilateralFilterShader, bilateralFilterHorizontalKernelID, "Source", tempRTID2);
+        cmd.SetComputeTextureParam(bilateralFilterShader, bilateralFilterHorizontalKernelID, "Result", tempRTID1);
+        cmd.DispatchCompute(bilateralFilterShader, bilateralFilterHorizontalKernelID, context.width, context.height, 1);
+        cmd.SetComputeTextureParam(bilateralFilterShader, bilateralFilterVerticalKernelID, "Source", tempRTID1);
+        cmd.SetComputeTextureParam(bilateralFilterShader, bilateralFilterVerticalKernelID, "Result", tempRTID2);
+        cmd.DispatchCompute(bilateralFilterShader, bilateralFilterVerticalKernelID, context.width, context.height, 1);*/
 
         // eigen
         cmd.SetComputeTextureParam(eigenShader, eigenKernelID, "Source", tempRTID2);
@@ -156,9 +174,10 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
 
 
         // Generate strokes
-        cmd.Blit(settings.canvasTexture.value, tempCanvas);
-        cmd.Blit(context.source, context.destination);
-        cmd.SetRenderTarget(tempCanvas);
+        //cmd.Blit(settings.canvasTexture.value, tempCanvas);
+        //cmd.Blit(context.source, context.destination);
+        //cmd.SetRenderTarget(tempCanvas);
+        cmd.Blit(settings.canvasTexture.value, context.destination);
         cmd.SetComputeTextureParam(strokeComputeShader, generateStrokeKernelID, "Source", context.source);
         cmd.SetComputeTextureParam(strokeComputeShader, generateStrokeKernelID, "Eigens", tempRTID1);
         cmd.SetComputeIntParam(strokeComputeShader, "StrokeInterval", settings.strokeInterval.value);
@@ -167,13 +186,15 @@ public sealed class StrokePaintingRenderer : PostProcessEffectRenderer<StrokePai
         cmd.CopyCounterValue(strokeBuffer, strokeArgsBuffer, 0);
         strokeRenderMat.SetBuffer("inputBuffer", strokeBuffer);
         strokeRenderMat.SetTexture("_MainTex", settings.strokeTexture.value);
+        strokeRenderMat.SetFloat("_StrokeSize", settings.strokeSize.value);
+        strokeRenderMat.SetFloat("_StrokeRatio", settings.strokeRatio.value);
         cmd.DrawProceduralIndirect(Matrix4x4.identity, strokeRenderMat, 0, MeshTopology.Points, strokeArgsBuffer);
-        cmd.CopyTexture(tempCanvas, 0, 0, context.width / 2, 0, context.width / 2, context.height, context.destination, 0, 0, context.width / 2, 0);
+        //cmd.CopyTexture(tempCanvas, 0, 0, context.width / 2, 0, context.width / 2, context.height, context.destination, 0, 0, context.width / 2, 0);
 
-        cmd.SetRenderTarget(context.destination);
+        //cmd.SetRenderTarget(context.destination);
         cmd.ReleaseTemporaryRT(tempRTID1);
         cmd.ReleaseTemporaryRT(tempRTID2);
-        cmd.ReleaseTemporaryRT(tempCanvas);
+        //cmd.ReleaseTemporaryRT(tempCanvas);
         cmd.EndSample("StrokePainting");
     }
 }

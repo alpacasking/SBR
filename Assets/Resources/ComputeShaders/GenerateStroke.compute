@@ -24,7 +24,8 @@ void GenerateStroke (uint3 id : SV_DispatchThreadID)
         float angleCos;
         float angleSin;
         float4  tempEigen = Eigens[id.xy];
-        if(tempEigen.x ==0&&tempEigen.y ==0){
+        float l = sqrt(tempEigen.x*tempEigen.x+tempEigen.y*tempEigen.y);
+        if(l==0){
             angleCos = 1;
             angleSin = 0;
         }
@@ -33,8 +34,8 @@ void GenerateStroke (uint3 id : SV_DispatchThreadID)
             angleCos = tempEigen.x/l;
             angleSin = tempEigen.y/l;
         }
-        
-        temp.eigens = float4(angleCos,-angleSin,tempEigen.z,tempEigen.w);
+        //TODO:size
+        temp.eigens = float4(angleCos,angleSin,1,tempEigen.w);
         GeneratedStrokes.Append (temp);
     }
 }

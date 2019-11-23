@@ -16,7 +16,6 @@ float2 SVD_AbsScaleOnly(float2x2 matrixIn)
     float discriminant = sqrt(Q*Q-4*R*R);
     float2 scale = sqrt(float2(Q+discriminant, Q-discriminant) / 2);
     return scale;
-
 }
 
 float2x2 SVD_EigenvectorGivenEigenvalue(float2x2 matrixIn, float2 eigenvalue)
@@ -36,7 +35,7 @@ float2x2 SVD_EigenvectorGivenEigenvalue(float2x2 matrixIn, float2 eigenvalue)
     return eigenMatrix;	
 
 }
-
+/*
 void SVD_PartialDecompose(float2x2 matrixIn, out float2x2 U, out float2 scale)
 {
     scale = SVD_AbsScaleOnly(matrixIn);
@@ -55,21 +54,24 @@ void SVD_FullDecompose(float2x2 matrixIn, out float2x2 U, out float2 scale, out 
         0, inverseScale.y,
     };
     V = mul(E, mul(transpose(U), matrixIn));
-}
+}*/
 
 [numthreads(1,1,1)]
 void Eigen (uint3 id : SV_DispatchThreadID)
 {
     // TODO: insert actual code here!
     float4 tensor = Source[id.xy];
-    float2x2 matrixIn;
-    matrixIn[0][0] = tensor.r;
-    matrixIn[0][1] = tensor.g;
-    matrixIn[1][0] = tensor.b;
-    matrixIn[1][1] = tensor.a;
-    float2 evalue;
-    float2x2 evector;
-    float2x2 v;
-    SVD_FullDecompose(matrixIn,evector,evalue,v);
-    Result[id.xy] = float4(evector[0][1],evector[1][1],evalue);
+    if(tensor.x== 0 && tensor.w ==0){
+        Result[id.xy] = float4(0,0,1,1);
+    }
+    else{
+        float2x2 matrixIn;
+        matrixIn[0][0] = tensor.r;
+        matrixIn[0][1] = tensor.g;
+        matrixIn[1][0] = tensor.b;
+        matrixIn[1][1] = tensor.a;
+        float2 evalue = SVD_AbsScaleOnly(matrixIn);
+        float2x2 evector = SVD_EigenvectorGivenEigenvalue(matrixIn,evalue);
+        Result[id.xy] = float4(evector[0][1],evector[1][1],evalue);
+    }
 }
